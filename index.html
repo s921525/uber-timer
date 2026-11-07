@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Uber 跑單時間計算器</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SheetJS (XLSX) for Multi-sheet Excel exports partitioned by day -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20%220%20100%20100%22><text y=%22.9em%22 font-size=%2290%22>⏱️</text></svg>">
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-amber-500 selection:text-slate-950">
+
+  <!-- Top Navigation / Header -->
+  <header class="bg-slate-950 border-b border-slate-800 sticky top-0 z-30 px-4 py-3 sm:px-6">
+    <div class="max-w-4xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-emerald-400 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg shadow-amber-500/20">
+          ⏱️
+        </div>
+        <div>
+          <h1 class="text-lg sm:text-xl font-black text-white tracking-tight">
+            Uber 跑單時間計算器
+          </h1>
+          <p class="text-xs text-slate-400">每日從第 1 單開始 · Excel 依日期自動分頁 · 一鍵直接結束</p>
+        </div>
+      </div>
+
+      <!-- Active Badge Indicator -->
+      <div id="runningOrdersBadge" class="hidden text-xs sm:text-sm font-semibold px-3 py-1.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+        <!-- Injected via app.js -->
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 space-y-6">
+
+    <!-- Section 1: Quick Start Buttons (快捷接單按鈕區) -->
+    <section class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 sm:p-5 shadow-lg">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+          <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+          一鍵開始接單計時
+        </h2>
+        <span class="text-xs text-emerald-400 font-semibold">點擊立即開始計時</span>
+      </div>
+
+      <!-- 3 Primary Launch Buttons -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <!-- 1 Order Button -->
+        <button id="btnStartOne"
+          class="btn-press-effect group bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-extrabold p-4 rounded-xl shadow-lg shadow-emerald-950/40 flex items-center justify-between border border-emerald-500/40 cursor-pointer">
+          <div class="text-left">
+            <div class="text-xs text-emerald-200 uppercase font-semibold">單張單</div>
+            <div class="text-xl sm:text-2xl font-black mt-0.5">+ 接一單</div>
+          </div>
+          <div class="w-12 h-12 rounded-lg bg-emerald-500/30 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+            🛵
+          </div>
+        </button>
+
+        <!-- 2 Orders Button (雙單) -->
+        <button id="btnStartDouble"
+          class="btn-press-effect group bg-gradient-to-br from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white font-extrabold p-4 rounded-xl shadow-lg shadow-blue-950/40 flex items-center justify-between border border-blue-500/40 cursor-pointer">
+          <div class="text-left">
+            <div class="text-xs text-blue-200 uppercase font-semibold">同時接 2 單</div>
+            <div class="text-xl sm:text-2xl font-black mt-0.5">雙單模式</div>
+          </div>
+          <div class="w-12 h-12 rounded-lg bg-blue-500/30 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+            ✌️
+          </div>
+        </button>
+
+        <!-- 3 Orders Button (三單) -->
+        <button id="btnStartTriple"
+          class="btn-press-effect group bg-gradient-to-br from-purple-600 to-violet-700 hover:from-purple-500 hover:to-violet-600 text-white font-extrabold p-4 rounded-xl shadow-lg shadow-purple-950/40 flex items-center justify-between border border-purple-500/40 cursor-pointer">
+          <div class="text-left">
+            <div class="text-xs text-purple-200 uppercase font-semibold">同時接 3 單</div>
+            <div class="text-xl sm:text-2xl font-black mt-0.5">三單模式</div>
+          </div>
+          <div class="w-12 h-12 rounded-lg bg-purple-500/30 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+            🔥
+          </div>
+        </button>
+      </div>
+    </section>
+
+    <!-- Section 2: Active Orders (進行中訂單 · 一鍵直接結束) -->
+    <section class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
+          <span>目前進行中的訂單</span>
+          <span class="text-xs font-normal text-slate-400">(點擊「直接結束」立刻存檔)</span>
+        </h2>
+
+        <!-- Extra Trip Add Button while running -->
+        <button id="btnAddMoreTrip" class="hidden text-xs sm:text-sm font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          + 再接一單 (夾單)
+        </button>
+      </div>
+
+      <!-- Active Orders Dynamic Grid -->
+      <div id="activeOrdersList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Dynamically rendered by app.js -->
+      </div>
+
+      <!-- Empty State for Active Orders -->
+      <div id="activeEmptyState" class="bg-slate-800/40 border border-dashed border-slate-700/80 rounded-2xl p-7 text-center">
+        <div class="text-3xl mb-1.5">🏁</div>
+        <h3 class="text-base font-bold text-slate-300">目前沒有跑單中</h3>
+        <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+          點擊上方按鈕開始單單、雙單或三單計時；送達時直接按下按鈕即可結束存檔。
+        </p>
+      </div>
+    </section>
+
+    <!-- Section 3: Daily Statistics Dashboard (今日統計數據彙整) -->
+    <section class="bg-slate-800 border border-slate-700 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-700/80">
+        <div>
+          <h2 id="currentDateHeading" class="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+            今日數據彙整
+          </h2>
+          <p class="text-xs text-slate-400">每日固定由「第 1 單」開始計數 · 隔天自動歸零</p>
+        </div>
+
+        <!-- Date Filter Controls -->
+        <div class="flex items-center gap-2 self-start sm:self-auto">
+          <input type="date" id="selectedDateInput"
+            class="bg-slate-900 border border-slate-700 text-slate-200 text-xs sm:text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-amber-400 cursor-pointer" />
+          <button id="btnDateToday" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors cursor-pointer">
+            回到今天
+          </button>
+        </div>
+      </div>
+
+      <!-- Key Stat Summary Cards -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <!-- Stat 1: Total Accepted Today -->
+        <div class="bg-slate-900/90 border border-amber-500/30 rounded-xl p-3 sm:p-4">
+          <div class="text-xs font-bold text-amber-300">今日總共接單</div>
+          <div class="mt-1 flex items-baseline gap-1">
+            <span id="statTotalAccepted" class="font-timer text-3xl sm:text-4xl font-black text-amber-400">0</span>
+            <span class="text-xs text-slate-400 font-bold">單</span>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-0.5">
+            (已完: <span id="statCompletedCount" class="text-emerald-400 font-bold">0</span> / 跑單中: <span id="statRunningCount" class="text-amber-400 font-bold">0</span>)
+          </div>
+        </div>
+
+        <!-- Stat 2: Completed Orders -->
+        <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3 sm:p-4">
+          <div class="text-xs font-semibold text-slate-400">今日已送達</div>
+          <div class="mt-1 flex items-baseline gap-1">
+            <span id="statCompletedCount" class="font-timer text-3xl sm:text-4xl font-black text-emerald-400">0</span>
+            <span class="text-xs text-slate-400 font-bold">單</span>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-0.5">已結束存檔單數</div>
+        </div>
+
+        <!-- Stat 3: Total Running Duration -->
+        <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3 sm:p-4">
+          <div class="text-xs font-semibold text-slate-400">跑單總時間</div>
+          <div class="mt-1">
+            <span id="statTotalTime" class="font-timer text-base sm:text-lg font-bold text-white block truncate">0 秒</span>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-0.5">今日所有單累計耗時</div>
+        </div>
+
+        <!-- Stat 4: Average Duration per order -->
+        <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3 sm:p-4">
+          <div class="text-xs font-semibold text-slate-400">平均每單耗時</div>
+          <div class="mt-1">
+            <span id="statAvgTime" class="font-timer text-base sm:text-lg font-bold text-teal-300 block truncate">0 秒</span>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-0.5">平均每單完成時間</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 4: Completed Orders Breakdown (每一筆訂單跑多久明細與刪除) -->
+    <section class="bg-slate-800 border border-slate-700 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-700/80">
+        <div>
+          <h2 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
+            每一筆訂單跑多久明細
+          </h2>
+          <p class="text-xs text-slate-400">記錄每單起訖時間與跑單秒數 · 誤按可隨時刪除</p>
+        </div>
+
+        <!-- Tools: Excel Multi-sheet Export & Reset -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <!-- Multi-sheet Excel button (按每日分頁) -->
+          <button id="btnExportExcelSheets" class="text-xs font-black px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 shadow-md shadow-emerald-950/40 transition-colors flex items-center gap-1.5 cursor-pointer" title="匯出全部紀錄，依照每日自動建立工作表分頁">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            <span>匯出 Excel (依每日分頁)</span>
+          </button>
+
+          <!-- Single day Excel button -->
+          <button id="btnExportExcelToday" class="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer" title="只匯出選取日期的報表">
+            匯出當日 Excel
+          </button>
+
+          <!-- Reset Day Button -->
+          <button id="btnClearDayData" class="text-xs font-bold px-2.5 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 transition-colors flex items-center gap-1 cursor-pointer" title="清空當日跑單紀錄">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            今日歸零
+          </button>
+        </div>
+      </div>
+
+      <!-- Completed Orders List -->
+      <div id="completedOrdersList" class="space-y-2.5">
+        <!-- Dynamically rendered by app.js -->
+      </div>
+
+      <!-- Empty State for History -->
+      <div id="historyEmptyState" class="py-10 text-center text-slate-400">
+        <div class="text-3xl mb-1.5">📋</div>
+        <div class="text-sm font-semibold text-slate-400">目前尚無已完成的跑單紀錄</div>
+        <div class="text-xs text-slate-500 mt-1">點擊上方「直接結束」按鈕後，該單的時間明細就會出現在這裡。</div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/80 py-4 px-4 text-center text-xs text-slate-500">
+    Uber 跑單時間計算器 · 每日固定從第 1 單開始 · 支援 Excel 每日分頁匯出
+  </footer>
+
+  <!-- JavaScript Scripts -->
+  <script src="js/timer.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
